@@ -368,7 +368,11 @@ async function renderArticle(slug, token){
         <h1 class="article__title">${esc(a.title)}</h1>
         <p class="article__dek">${esc(a.dek)}</p>
         <div class="byline"><b>${esc(a.author_name)}</b><span>${esc(a.read_time)}</span><span>${formatDate(a.created_at)}</span></div>
-        ${isAuthorOrAdmin ? `<div class="article__admin-bar"><a class="btn" href="#/admin/edit/${a.slug}">Edit article</a></div>` : ""}
+        <div class="article__admin-bar">
+          <button class="btn" id="shareBtn" type="button">Share article</button>
+          <span class="form-msg ok" id="shareMsg" style="margin:0;"></span>
+          ${isAuthorOrAdmin ? `<a class="btn" href="#/admin/edit/${a.slug}">Edit article</a>` : ""}
+        </div>
       </div>
 
       <div class="why-box" style="max-width:68ch;">
@@ -407,6 +411,28 @@ async function renderArticle(slug, token){
       </div>
     </article>
   `;
+
+  const shareBtn = document.getElementById("shareBtn");
+  if(shareBtn){
+    shareBtn.addEventListener("click", async ()=>{
+      const shareUrl = location.origin + location.pathname + "#/article/" + slug;
+      const shareMsg = document.getElementById("shareMsg");
+      if(navigator.share){
+        try{
+          await navigator.share({title: a.title, text: a.dek, url: shareUrl});
+        }catch(e){ /* user cancelled — do nothing */ }
+      } else {
+        try{
+          await navigator.clipboard.writeText(shareUrl);
+          shareMsg.textContent = "Link copied!";
+          setTimeout(()=>{ if(shareMsg) shareMsg.textContent = ""; }, 2500);
+        }catch(e){
+          shareMsg.className = "form-msg err";
+          shareMsg.textContent = "Couldn't copy — copy the page URL from your address bar instead.";
+        }
+      }
+    });
+  }
 
   async function loadComments(){
     const {data} = await sb.from("comments").select("*").eq("article_slug", slug).order("created_at", {ascending:false}).limit(50);
