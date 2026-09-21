@@ -43,6 +43,7 @@ button{font:inherit;cursor:pointer;}
 .masthead__nav a.active{border-color:var(--gold);color:var(--gold-deep);}
 .masthead__nav a:hover{border-color:var(--gold);}
 .masthead__actions{display:flex;align-items:center;gap:10px;}
+#authArea{display:flex;align-items:center;gap:10px;}
 .btn{font-family:var(--font-ui);font-weight:700;font-size:13px;padding:9px 16px;border-radius:2px;border:2px solid var(--ink);background:none;color:var(--ink);}
 .btn:hover{background:var(--ink);color:var(--paper);}
 .btn-solid{background:var(--ink);color:var(--paper);}

@@ -621,6 +621,40 @@ function renderSignup(){
   });
 }
 
+/* ---------- Draft autosave (survives tab switches, accidental closes, refreshes) ---------- */
+function draftKey(id){ return "genz_draft_" + (id || "new"); }
+function loadDraft(key){
+  try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function saveDraft(key, data){
+  try{ localStorage.setItem(key, JSON.stringify(data)); }catch(e){}
+}
+function clearDraft(key){
+  try{ localStorage.removeItem(key); }catch(e){}
+}
+function currentFormData(){
+  return {
+    title: document.getElementById("fTitle").value,
+    section: document.getElementById("fSection").value,
+    slug: document.getElementById("fSlug").value,
+    dek: document.getElementById("fDek").value,
+    why_matters: document.getElementById("fWhy").value,
+    body: document.getElementById("fBody").value,
+    read_time: document.getElementById("fReadTime").value,
+    published: document.getElementById("fPublished").checked,
+  };
+}
+function wireDraftAutosave(key){
+  const ids = ["fTitle","fSection","fSlug","fDek","fWhy","fBody","fReadTime","fPublished"];
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", ()=> saveDraft(key, currentFormData()));
+    el.addEventListener("change", ()=> saveDraft(key, currentFormData()));
+  });
+}
+
 /* ---------- Admin: new / edit article ---------- */
 function articleForm(existing){
   const a = existing || {};
@@ -648,17 +682,37 @@ function renderAdminNew(){
     app().innerHTML = `<div class="wrap not-authorized">You need admin access to publish articles.</div>`;
     return;
   }
+  const key = draftKey("new");
+  const draft = loadDraft(key);
+
   app().innerHTML = `
-    <section class="intro wrap"><h1>New article</h1><p>This publishes straight to the live site.</p></section>
+    <section class="intro wrap">
+      <h1>New article</h1>
+      <p>This publishes straight to the live site.${draft ? ` <strong style="color:var(--gold-deep);">A saved draft was restored — it autosaves as you type, so switching tabs or closing this one is safe.</strong>` : ` It autosaves as you type — safe to switch tabs (e.g. to copy from Claude) and come back.`}</p>
+    </section>
     <section class="section" style="border-top:none;">
-      <div class="wrap"><div class="form-card" style="max-width:720px;">${articleForm(null)}</div></div>
+      <div class="wrap">
+        <div class="form-card" style="max-width:720px;">${articleForm(draft)}</div>
+        ${draft ? `<div style="margin-top:14px;"><button class="btn" id="clearDraftBtn" type="button">Discard draft &amp; start over</button></div>` : ""}
+      </div>
     </section>
   `;
+
   const titleEl = document.getElementById("fTitle");
   const slugEl = document.getElementById("fSlug");
-  let slugTouched = false;
+  let slugTouched = !!(draft && draft.slug);
   slugEl.addEventListener("input", ()=>{ slugTouched = true; });
   titleEl.addEventListener("input", ()=>{ if(!slugTouched) slugEl.value = slugify(titleEl.value); });
+
+  wireDraftAutosave(key);
+
+  const clearBtn = document.getElementById("clearDraftBtn");
+  if(clearBtn){
+    clearBtn.addEventListener("click", ()=>{
+      clearDraft(key);
+      renderAdminNew();
+    });
+  }
 
   document.getElementById("articleForm").addEventListener("submit", async (e)=>{
     e.preventDefault();
@@ -683,6 +737,7 @@ function renderAdminNew(){
       msg.className = "form-msg err";
       btn.disabled = false;
     } else {
+      clearDraft(key);
       location.hash = "#/article/" + payload.slug;
     }
   });
@@ -703,15 +758,34 @@ async function renderAdminEdit(slug, token){
     return;
   }
 
+  const key = draftKey(a.slug);
+  const draft = loadDraft(key);
+
   app().innerHTML = `
-    <section class="intro wrap"><h1>Edit article</h1></section>
+    <section class="intro wrap">
+      <h1>Edit article</h1>
+      <p>${draft ? `<strong style="color:var(--gold-deep);">Unsaved changes were restored.</strong> ` : ""}Autosaves as you type — safe to switch tabs and come back.</p>
+    </section>
     <section class="section" style="border-top:none;">
       <div class="wrap">
-        <div class="form-card" style="max-width:720px;">${articleForm(a)}</div>
-        <div style="margin-top:18px;"><button class="mini-btn danger admin-table" id="deleteBtn" style="padding:8px 14px;border:2px solid var(--ink);background:none;font-family:var(--font-ui);font-weight:700;">Delete article</button></div>
+        <div class="form-card" style="max-width:720px;">${articleForm(draft || a)}</div>
+        <div style="margin-top:18px;display:flex;gap:10px;">
+          <button class="mini-btn danger admin-table" id="deleteBtn" style="padding:8px 14px;border:2px solid var(--ink);background:none;font-family:var(--font-ui);font-weight:700;">Delete article</button>
+          ${draft ? `<button class="btn" id="clearDraftBtn" type="button">Discard unsaved changes</button>` : ""}
+        </div>
       </div>
     </section>
   `;
+
+  wireDraftAutosave(key);
+
+  const clearBtn = document.getElementById("clearDraftBtn");
+  if(clearBtn){
+    clearBtn.addEventListener("click", ()=>{
+      clearDraft(key);
+      renderAdminEdit(slug, navToken);
+    });
+  }
 
   document.getElementById("articleForm").addEventListener("submit", async (e)=>{
     e.preventDefault();
@@ -735,6 +809,7 @@ async function renderAdminEdit(slug, token){
       msg.className = "form-msg err";
       btn.disabled = false;
     } else {
+      clearDraft(key);
       location.hash = "#/article/" + newSlug;
     }
   });
@@ -742,7 +817,7 @@ async function renderAdminEdit(slug, token){
   document.getElementById("deleteBtn").addEventListener("click", async ()=>{
     if(!confirm("Delete this article? This can't be undone.")) return;
     const {error} = await sb.from("articles").delete().eq("id", a.id);
-    if(!error) location.hash = "#/";
+    if(!error){ clearDraft(key); location.hash = "#/"; }
   });
 }
 
